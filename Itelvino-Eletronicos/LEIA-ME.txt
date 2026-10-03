@@ -1,0 +1,101 @@
+ITELVINO ELETRÔNICOS — CONTROLE DE ESTOQUE E VENDAS
+
+PRIMEIRO ACESSO
+1. Instale o Python 3 para Windows, caso ainda não esteja instalado.
+   Durante a instalação, marque a opção para adicionar o Python ao PATH.
+2. Abra "Iniciar sistema.bat".
+3. No primeiro acesso, crie o primeiro usuário e senha.
+4. Cadastre os produtos. O código de barras pode ser lido por um leitor comum,
+   que funciona como teclado, ou digitado manualmente.
+
+RECURSOS INCLUÍDOS
+- Cadastro e edição de código de barras, descrição, custo e preço de venda.
+- Foto opcional do produto (JPG, PNG, BMP, GIF ou TIFF), salva junto aos dados locais.
+- Registro de estoque inicial, entradas e saídas manuais.
+- Busca de produtos digitando nome ou código nas abas de estoque e vendas; a foto aparece ao selecionar.
+- Vendas com quantidade informada ao adicionar, desconto percentual, forma de pagamento e parcelas.
+- Bloqueio de venda quando não há saldo suficiente no estoque.
+- Cadastro de usuários adicionais e troca de senha; vendas e movimentos identificam o usuário responsável.
+- Campos numéricos alinhados à direita.
+- Relatórios diários e mensais com quantidade de itens, valores de venda e custos/investimentos; filtros por número da venda, item e tipo de entrada/saída.
+- Logo da empresa no acesso e no cabeçalho do sistema; histórico completo de movimentações com data e hora.
+- Site móvel responsivo para Android e iPhone; no modo local, compartilha os dados pela mesma rede Wi-Fi.
+- No modo hospedado, o site pode ser aberto no navegador do PC e do celular com uma base online compartilhada.
+
+ACESSO PELO CELULAR
+1. Conecte o computador e o celular à mesma rede Wi-Fi.
+2. Abra o sistema no computador. O endereço para o celular aparece na tela de acesso e no rodapé.
+3. Digite esse endereço no navegador do celular e entre com seu usuário e senha.
+4. Mantenha o computador ligado e o sistema aberto enquanto usar o celular.
+Na primeira conexão, o Windows pode perguntar se o Python pode receber conexões
+na rede privada; permita o acesso para o celular encontrar o computador.
+
+HOSPEDAR PARA ACESSAR DE QUALQUER LUGAR
+O pacote inclui render.yaml para criar uma hospedagem Render com armazenamento
+persistente. Não publique o conteúdo da pasta como um site estático: o servidor
+precisa executar cloud_server.py e manter o volume /var/data conectado.
+Para acessar os mesmos produtos, vendas e movimentações no PC e no celular,
+abra o MESMO endereço do site no navegador dos dois aparelhos. O atalho
+"Iniciar sistema.bat" abre a versão desktop local, que usa um banco separado e
+não sincroniza automaticamente com o site hospedado.
+1. Crie um repositório privado no GitHub com os arquivos deste pacote.
+2. No Render, conecte esse repositório como um Blueprint e revise o plano pago
+   indicado. O render.yaml cria um serviço web e um disco persistente de 1 GB.
+3. Após o deploy, abra o endereço HTTPS criado pelo Render em um navegador no
+   computador e no celular. Os dois acessam a mesma base online.
+4. Para o primeiro acesso, consulte ITELVINO_SETUP_KEY na área Environment do
+   serviço Render e informe essa chave na configuração inicial do site. Ela só
+   é usada para criar o primeiro usuário.
+5. Na área Conta do site, baixe regularmente uma cópia do banco e das fotos e
+   guarde-a em outro lugar, como outro computador ou armazenamento em nuvem.
+
+O disco persistente guarda os dados entre reinicializações e implantações. O
+Render também cria snapshots automáticos diários do disco, mantidos por pelo
+menos sete dias. Para operar o site hospedado, abra o endereço web no navegador
+do PC; o programa Windows iniciado pelo arquivo .bat continua usando o banco
+local deste computador e não sincroniza automaticamente com a nuvem.
+O armazenamento persistente exige serviço pago no Render. Na consulta de
+03/10/2026, o menor serviço configurado custa cerca de US$ 7 por mês e o disco
+de 1 GB cerca de US$ 0,25 por mês, antes de impostos e eventuais cobranças de
+uso. Consulte a página de preços do Render antes de confirmar a publicação.
+Snapshots e cópias baixadas ajudam na recuperação, mas mantenha também uma
+cópia de segurança em outro local. Nenhum serviço pode prometer risco zero de
+perda de dados.
+
+IMPORTANTE SOBRE DADOS JÁ CADASTRADOS
+O banco online começa vazio. Se já houver produtos, vendas ou movimentações no
+programa Windows, não comece a usar o site como banco oficial até esses dados
+serem transferidos. O banco local fica em
+%LOCALAPPDATA%\ItelvinoEletronicos\itelvino.db e as fotos ficam na pasta
+product_images dentro da mesma localização. Guarde o banco e as fotos antes de
+mudar para a hospedagem; uma migração pode ser preparada para levar o histórico
+com segurança.
+
+REQUISITOS
+- Windows 10 ou 11.
+- Python 3.10 ou mais recente.
+- Não é necessário instalar bibliotecas adicionais.
+
+DADOS
+No modo Windows local, o banco de dados é criado automaticamente em:
+%LOCALAPPDATA%\ItelvinoEletronicos\itelvino.db
+
+No modo local, vendas e movimentações ficam neste computador e o celular acessa
+essa mesma base pela rede local. No modo hospedado, os registros e fotos ficam
+no disco persistente online; use os snapshots do provedor e baixe cópias pela
+área Conta do site. O programa Windows iniciado pelo .bat continua no modo
+local e não sincroniza com o site hospedado.
+
+Vendas antigas podem não ter o custo unitário salvo no item. Quando disponível,
+o sistema recupera esse valor do histórico de movimentação; caso contrário, o
+relatório informa a quantidade sem custo registrado e mostra investimento parcial.
+
+OBSERVAÇÕES
+- Valores podem ser digitados como 12,50 ou 12.50.
+- Datas dos relatórios devem ser digitadas no formato DD/MM/YYYY; use as setas
+  para avançar ou voltar um dia. Nos relatórios mensais, use MM/YYYY e as setas
+  para navegar entre os meses.
+- O número de parcelas é registrado junto à venda. O sistema não controla
+  vencimentos ou recebimentos futuros de cada parcela.
+- Emissão de nota fiscal e impressão de comprovante não fazem parte desta
+  primeira versão.
