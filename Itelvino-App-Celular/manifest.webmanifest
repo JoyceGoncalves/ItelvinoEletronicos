@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "Itelvino Eletrônicos — Estoque e Vendas",
+  "short_name": "Itelvino",
+  "description": "Controle local de produtos, estoque, vendas e relatórios.",
+  "lang": "pt-BR",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f5fa",
+  "theme_color": "#101c38",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: itelvino-app-celular
+    runtime: static
+    buildCommand: echo "Arquivos estáticos prontos"
+    staticPublishPath: .

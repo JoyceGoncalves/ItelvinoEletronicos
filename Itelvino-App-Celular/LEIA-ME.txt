@@ -1,0 +1,71 @@
+ITELVINO ELETRÔNICOS — APLICATIVO INSTALÁVEL PARA CELULAR
+
+COMO ESTA VERSÃO FUNCIONA
+- É um aplicativo web instalável (PWA), feito para Android e iPhone.
+- Produtos, fotos, vendas, usuários e movimentações ficam no armazenamento local
+  do navegador/aplicativo no celular. O sistema não envia esses registros para
+  um servidor e funciona sem internet depois de instalado e aberto uma vez.
+- Cada aparelho mantém seus próprios dados. Não há sincronização automática com
+  o computador ou com outros celulares.
+- O site de hospedagem entrega somente os arquivos do aplicativo. Uma opção de
+  hospedagem estática gratuita pode ser usada; ela não guarda os registros da
+  loja.
+
+INSTALAÇÃO
+O aplicativo precisa ser publicado em um endereço HTTPS para permitir a
+instalação e o funcionamento offline. Esta pasta contém os arquivos estáticos
+e um render.yaml para hospedar gratuitamente como site estático no Render; não
+é um arquivo APK ou EXE. A hospedagem entrega o código e o logo, não recebe os
+dados da loja.
+
+Android:
+1. Abra o endereço HTTPS publicado no Chrome do celular.
+2. Escolha “Instalar app” ou “Adicionar à tela inicial” no menu do navegador.
+3. Abra o ícone Itelvino instalado e crie o usuário e a senha locais.
+
+iPhone:
+1. Abra o endereço HTTPS no Safari.
+2. Toque em Compartilhar e escolha “Adicionar à Tela de Início”.
+3. Ative “Abrir como Aplicativo Web”, se a opção aparecer, e toque em Adicionar.
+4. Abra o ícone Itelvino e crie o usuário e a senha locais.
+
+BACKUP DOS DADOS
+1. No aplicativo, abra Conta e segurança e toque em “Baixar backup”.
+2. Guarde o arquivo .json fora do celular, por exemplo em um computador ou
+   armazenamento pessoal seguro.
+3. Para recuperar, abra Conta e segurança, escolha o arquivo e toque em
+   “Restaurar no aparelho”. A restauração substitui os dados locais atuais e
+   exige entrar novamente com um usuário incluído no backup.
+
+O backup JSON não é criptografado. Guarde o arquivo em um local privado e
+protegido.
+
+O navegador tenta marcar o armazenamento como persistente, mas o sistema
+operacional pode remover dados se o usuário apagar o aplicativo/dados do site,
+limpar o navegador, perder o aparelho ou restaurar o aparelho. Faça backups
+regulares e não mantenha a única cópia no mesmo celular.
+
+PUBLICAÇÃO ESTÁTICA
+1. Crie um repositório no GitHub contendo os arquivos desta pasta diretamente
+   na raiz do repositório.
+2. No Render, escolha New > Blueprint e conecte esse repositório. O render.yaml
+   publica esta pasta como site estático gratuito.
+3. Quando a publicação terminar, abra o endereço HTTPS no celular e siga os
+   passos de instalação acima.
+
+Não precisa de Python, banco de dados em nuvem, API ou serviço web pago. Não
+altere os caminhos relativos e mantenha juntos index.html,
+local-database.js, sw.js, manifest.webmanifest, logo.jpg e os dois ícones PNG.
+
+RECURSOS
+- Cadastro e edição de produtos, código de barras, custo, preço, estoque e foto.
+- Entrada e saída manual de estoque com usuário, data e hora.
+- Vendas com quantidade, desconto percentual, pagamento e parcelas.
+- Bloqueio de venda quando o saldo do produto não é suficiente.
+- Relatórios diários/mensais e filtros por venda, item e tipo de movimento.
+- Cadastro local de usuários, autenticação com senha derivada e registro do
+  usuário nas movimentações e vendas.
+- Exportação e restauração de backup incluindo fotos e histórico.
+
+O aplicativo inicia com uma base local vazia. Ele não importa sozinho o banco
+SQLite do programa Windows nem os dados da versão hospedada.
