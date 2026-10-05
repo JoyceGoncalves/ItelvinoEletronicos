@@ -6,6 +6,8 @@ com navegação lateral no computador, tabelas de gestão e painel de vendas,
 seguindo a estrutura do sistema Wotz.
 
 - Resumo com vendas, estoque, vendas dos últimos sete dias e estoque baixo.
+- No celular, barra inferior com atalhos principais, menu Mais para as outras áreas,
+  tabelas em cartões e controles dimensionados para toque.
 - Produtos em tabela, pesquisa, filtros por saldo, fotos, edição e exclusão
   segura de itens sem estoque.
 - Catálogo com fotos e opção de baixar uma página de catálogo.
