@@ -1,4 +1,4 @@
-const CACHE_NAME = "itelvino-mobile-local-v1";
+const CACHE_NAME = "itelvino-mobile-local-v2";
 const APP_FILES = ["./", "./index.html", "./local-database.js", "./manifest.webmanifest", "./logo.jpg", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", event => {
@@ -24,3 +24,4 @@ self.addEventListener("fetch", event => {
     return new Response("Recurso indisponível sem conexão.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }));
 });
+

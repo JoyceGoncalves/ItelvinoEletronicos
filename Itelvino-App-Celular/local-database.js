@@ -81,17 +81,28 @@
     return Array.from(new Uint8Array(bits), b => b.toString(16).padStart(2, "0")).join("");
   }
 
-  async function addUser(username, password) {
+  async function addUser(username, password, role = "seller") {
     const name = String(username || "").trim();
     if (!name || name.length > 80) fail("Informe um nome de usuário válido.");
     if (String(password || "").length < 6) fail("Use uma senha com pelo menos 6 caracteres.");
+    if (!["admin", "seller"].includes(role)) fail("Escolha um perfil válido.");
     const key = usernameKey(name);
     if (await one("users", key)) fail("Já existe um usuário com esse nome.");
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const saltHex = Array.from(salt, b => b.toString(16).padStart(2, "0")).join("");
-    const record = { usernameKey: key, username: name, salt: saltHex, password_hash: await passwordHash(password, salt), created_at: stamp() };
+    const record = { usernameKey: key, username: name, role, salt: saltHex, password_hash: await passwordHash(password, salt), created_at: stamp() };
     await transaction(["users"], "readwrite", tx => tx.objectStore("users").add(record));
-    return name;
+    return { username: name, role };
+  }
+
+  async function ensureUserRoles() {
+    const users = await all("users");
+    if (!users.length || (users.some(u => u.role === "admin") && users.every(u => ["admin", "seller"].includes(u.role)))) return users;
+    const sorted = users.slice().sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")) || String(a.usernameKey).localeCompare(String(b.usernameKey)));
+    if (!users.some(u => u.role === "admin")) sorted[0].role = "admin";
+    const normalized = users.map(u => Object.assign({}, u, { role: u.role === "admin" ? "admin" : "seller" }));
+    await transaction(["users"], "readwrite", tx => normalized.forEach(u => tx.objectStore("users").put(u)));
+    return normalized;
   }
 
   async function authenticate(username, password) {
@@ -99,8 +110,10 @@
     if (!record) return null;
     const salt = new Uint8Array((record.salt.match(/.{2}/g) || []).map(v => parseInt(v, 16)));
     const digest = await passwordHash(String(password || ""), salt);
-    return digest === record.password_hash ? record.username : null;
+    return digest === record.password_hash ? { username: record.username, role: record.role || "seller" } : null;
   }
+
+  
 
   function productData(product) {
     return Object.assign({}, product, { photo_url: product.photo_data || null });
@@ -178,12 +191,16 @@
         if (!product) { problem = new Error("Produto não encontrado."); tx.abort(); return; }
         if (kind === "Saída" && product.quantity < qty) { problem = new Error("A saída é maior que o saldo atual do produto."); tx.abort(); return; }
         const unitCost = suppliedCost == null ? Number(product.cost) : suppliedCost;
-        const next = Object.assign({}, product, { quantity: product.quantity + (kind === "Entrada" ? qty : -qty), cost: kind === "Entrada" ? cents(unitCost) : product.cost });
-        tx.objectStore("products").put(next);
-        tx.objectStore("movements").add({ product_id: productId, kind: kind === "Saída" ? "Saída manual" : kind, quantity: qty, unit_cost: cents(unitCost), note: String(data.note || "").trim().slice(0, 240), sale_id: null, username, created_at: created });
+        const quantityBefore = Number(product.quantity || 0), costBefore = Number(product.cost || 0);
+        const nextQuantity = quantityBefore + (kind === "Entrada" ? qty : -qty);
+        const nextCost = kind === "Entrada" ? cents(((quantityBefore * costBefore) + (qty * unitCost)) / nextQuantity) : costBefore;
+        tx.objectStore("products").put(Object.assign({}, product, { quantity: nextQuantity, cost: nextCost }));
+        tx.objectStore("movements").add({ product_id: productId, barcode: product.barcode, description: product.description, kind: kind === "Saída" ? "Saída manual" : kind, quantity: qty, quantity_before: quantityBefore, cost_before: costBefore, unit_cost: cents(unitCost), note: String(data.note || "").trim().slice(0, 240), sale_id: null, username, created_at: created });
       };
     });
   }
+
+  
 
   async function saveSale(data, username) {
     if (!Array.isArray(data.items) || !data.items.length) fail("Adicione pelo menos um produto à venda.");
@@ -226,7 +243,7 @@
             for (const { product, quantity } of cart) {
               itemStore.add({ sale_id: saleId, product_id: product.id, barcode: product.barcode, description: product.description, quantity, unit_price: product.price, unit_cost: product.cost, line_total: cents(quantity * product.price) });
               productStore.put(Object.assign({}, product, { quantity: product.quantity - quantity }));
-              movementStore.add({ product_id: product.id, kind: "Venda", quantity, unit_cost: product.cost, note: `Venda #${saleId}`, sale_id: saleId, username, created_at: created });
+              movementStore.add({ product_id: product.id, barcode: product.barcode, description: product.description, kind: "Venda", quantity, quantity_before: product.quantity, cost_before: product.cost, unit_cost: product.cost, note: `Venda #${saleId}`, sale_id: saleId, username, created_at: created });
             }
             result = { sale_id: saleId, subtotal, discount: discountValue, total };
           };
@@ -257,8 +274,8 @@
   async function reportData(query) {
     const day = query.get("day") || stamp().slice(0, 10), month = query.get("month") || day.slice(0, 7);
     const saleFilter = String(query.get("sale") || "").replace(/^#/, ""), itemQuery = query.get("item") || "";
-    const [dailySales, monthlySales, saleItems] = await Promise.all([
-      saleRows(day, false, saleFilter, itemQuery), saleRows(month, true, saleFilter, itemQuery), all("sale_items")
+    const [dailySales, monthlySales, saleItems, allSales] = await Promise.all([
+      saleRows(day, false, saleFilter, itemQuery), saleRows(month, true, saleFilter, itemQuery), all("sale_items"), all("sales")
     ]);
     const summarize = rows => ({ sale_count: rows.length, count: rows.length, subtotal: cents(rows.reduce((s, x) => s + x.subtotal, 0)), discount: cents(rows.reduce((s, x) => s + x.discount_value, 0)), total: cents(rows.reduce((s, x) => s + x.total, 0)) });
     const sumItems = rows => {
@@ -272,8 +289,16 @@
       return Array.from(groups.values());
     };
     const dailySummary = summarize(dailySales), monthlySummary = summarize(monthlySales);
+    const trend = [];
+    const [year, monthNumber, dayNumber] = day.split("-").map(Number);
+    for (let offset = 6; offset >= 0; offset--) {
+      const date = new Date(year, monthNumber - 1, dayNumber - offset);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      const rows = allSales.filter(s => s.created_at.slice(0, 10) === key);
+      trend.push({ date: key, label: date.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", ""), total: cents(rows.reduce((sum, row) => sum + Number(row.total || 0), 0)), count: rows.length });
+    }
     return {
-      day, month,
+      day, month, trend,
       daily: { summary: dailySummary, items: sumItems(dailySales), payments: payments(dailySales), sales: dailySales },
       monthly: { summary: monthlySummary, items: sumItems(monthlySales), methods: payments(monthlySales), sales: monthlySales }
     };
@@ -281,21 +306,105 @@
 
   async function movementRows(query) {
     const month = query.get("month") || stamp().slice(0, 7), kind = query.get("kind") || "Todos";
-    const saleFilter = String(query.get("sale") || "").replace(/^#/, ""), itemQuery = query.get("item") || "";
+    const period = query.get("period") || "month", today = stamp().slice(0, 10);
+    const saleFilter = String(query.get("sale") || "").replace(/^#/, ""), itemQuery = normalize(query.get("item") || "");
     const [movements, products, sales] = await Promise.all([all("movements"), all("products"), all("sales")]);
     const productMap = new Map(products.map(p => [p.id, p])), saleMap = new Map(sales.map(s => [s.id, s]));
-    const rows = movements.filter(m => m.created_at.slice(0, 7) === month)
+    const rows = movements.filter(m => period === "all" || (period === "today" ? m.created_at.slice(0, 10) === today : m.created_at.slice(0, 7) === month))
       .filter(m => kind === "Todos" || (kind === "Entradas" ? ["Entrada", "Entrada inicial"].includes(m.kind) : ["Saída manual", "Venda"].includes(m.kind)))
       .filter(m => !saleFilter || Number(m.sale_id) === Number(saleFilter))
-      .filter(m => { const p = productMap.get(m.product_id); return p && (!itemQuery || normalize(`${p.barcode} ${p.description}`).includes(normalize(itemQuery))); })
+      .filter(m => { const p = productMap.get(m.product_id), code = p?.barcode || m.barcode || "", name = p?.description || m.description || ""; return !itemQuery || normalize(`${code} ${name} ${m.username || ""}`).includes(itemQuery); })
       .map(m => {
         const p = productMap.get(m.product_id), sale = m.sale_id ? saleMap.get(m.sale_id) : null;
-        return Object.assign({}, m, { barcode: p.barcode, description: p.description, payment_method: sale?.payment_method || null, installments: sale?.installments || null, sale_number: sale?.id || null, reference: sale ? `Venda #${sale.id} · ${sale.payment_method} · ${sale.installments} parcela(s)` : m.note });
-      })
-      .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id);
+        return Object.assign({}, m, { barcode: p?.barcode || m.barcode || "—", description: p?.description || m.description || "Produto removido", payment_method: sale?.payment_method || null, installments: sale?.installments || null, sale_number: sale?.id || null, reference: sale ? `Venda #${sale.id} · ${sale.payment_method} · ${sale.installments} parcela(s)` : m.note });
+      }).sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id);
     const incoming = rows.filter(r => ["Entrada", "Entrada inicial"].includes(r.kind)), outgoing = rows.filter(r => ["Saída manual", "Venda"].includes(r.kind));
     return { totals: { incoming: incoming.reduce((s, r) => s + r.quantity, 0), outgoing: outgoing.reduce((s, r) => s + r.quantity, 0), incoming_value: cents(incoming.reduce((s, r) => s + r.quantity * r.unit_cost, 0)), outgoing_value: cents(outgoing.reduce((s, r) => s + r.quantity * r.unit_cost, 0)) }, rows };
   }
+
+  async function deleteProduct(id) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(["products", "movements"], "readwrite");
+      let problem;
+      tx.oncomplete = () => resolve({ ok: true });
+      tx.onabort = () => reject(problem || tx.error || new Error("Não foi possível remover o produto."));
+      const store = tx.objectStore("products"), request = store.get(Number(id));
+      request.onsuccess = () => {
+        const product = request.result;
+        if (!product) { problem = new Error("Produto não encontrado."); tx.abort(); return; }
+        if (Number(product.quantity) !== 0) { problem = new Error("Só é possível excluir produtos com estoque zerado."); tx.abort(); return; }
+        const movements = tx.objectStore("movements"), history = movements.getAll();
+        history.onsuccess = () => {
+          for (const row of history.result || []) if (row.product_id === product.id) movements.put(Object.assign({}, row, { barcode: row.barcode || product.barcode, description: row.description || product.description }));
+          store.delete(Number(id));
+        };
+      };
+    });
+  }
+
+  async function deleteMovement(id) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(["products", "sales", "sale_items", "movements"], "readwrite");
+      let problem;
+      tx.oncomplete = () => resolve({ ok: true });
+      tx.onabort = () => reject(problem || tx.error || new Error("Não foi possível remover a movimentação."));
+      const products = tx.objectStore("products"), sales = tx.objectStore("sales"), items = tx.objectStore("sale_items"), movements = tx.objectStore("movements");
+      const request = movements.get(Number(id));
+      request.onsuccess = () => {
+        const movement = request.result;
+        if (!movement) { problem = new Error("Movimentação não encontrada."); tx.abort(); return; }
+        if (movement.sale_id) {
+          let pending = 3, saleItems, saleMoves;
+          const done = () => {
+            if (--pending) return;
+            const restore = index => {
+              if (index >= saleItems.length) {
+                for (const item of saleItems) items.delete(item.id);
+                for (const row of saleMoves) movements.delete(row.id);
+                sales.delete(Number(movement.sale_id));
+                return;
+              }
+              const item = saleItems[index], get = products.get(item.product_id);
+              get.onsuccess = () => { const product = get.result; if (product) products.put(Object.assign({}, product, { quantity: Number(product.quantity || 0) + Number(item.quantity || 0) })); restore(index + 1); };
+            };
+            restore(0);
+          };
+          const itemRequest = items.index("sale_id").getAll(Number(movement.sale_id));
+          itemRequest.onsuccess = () => { saleItems = itemRequest.result || []; done(); };
+          const movementRequest = movements.index("sale_id").getAll(Number(movement.sale_id));
+          movementRequest.onsuccess = () => { saleMoves = movementRequest.result || []; done(); };
+          const saleRequest = sales.get(Number(movement.sale_id));
+          saleRequest.onsuccess = () => done();
+          return;
+        }
+        const allRequest = movements.getAll(), productRequest = products.get(Number(movement.product_id));
+        let allRows, product, pending = 2;
+        const apply = () => {
+          if (--pending) return;
+          const latest = allRows.filter(m => m.product_id === movement.product_id).sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id)[0];
+          if (!latest || latest.id !== movement.id) { problem = new Error("Para manter o custo médio correto, só é possível desfazer a movimentação mais recente deste produto."); tx.abort(); return; }
+          if (!product) { problem = new Error("O produto desta movimentação foi removido."); tx.abort(); return; }
+          let quantity, cost = Number(product.cost || 0);
+          if (["Entrada", "Entrada inicial"].includes(movement.kind)) {
+            quantity = Number(product.quantity || 0) - Number(movement.quantity || 0);
+            if (quantity < 0) { problem = new Error("Não há saldo suficiente para desfazer esta entrada."); tx.abort(); return; }
+            if (movement.cost_before != null) cost = Number(movement.cost_before);
+            else if (quantity > 0) cost = cents((Number(product.quantity || 0) * Number(product.cost || 0) - Number(movement.quantity || 0) * Number(movement.unit_cost || 0)) / quantity);
+            else cost = 0;
+          } else if (movement.kind === "Saída manual") quantity = Number(product.quantity || 0) + Number(movement.quantity || 0);
+          else { problem = new Error("Tipo de movimentação não pode ser desfeito individualmente."); tx.abort(); return; }
+          products.put(Object.assign({}, product, { quantity, cost: Math.max(0, cost) }));
+          movements.delete(Number(id));
+        };
+        allRequest.onsuccess = () => { allRows = allRequest.result || []; apply(); };
+        productRequest.onsuccess = () => { product = productRequest.result; apply(); };
+      };
+    });
+  }
+
+  
 
   async function exportBackup() {
     const data = { app: "itelvino-eletronicos-local", version: 1, exported_at: stamp(), products: await all("products"), sales: await all("sales"), sale_items: await all("sale_items"), movements: await all("movements"), users: await all("users") };
@@ -327,30 +436,62 @@
     } else if (options.body && typeof options.body === "object") body = options.body;
     const ok = data => response(data, 200), error = (message, status = 400) => response({ error: message }, status);
     try {
+      await ensureUserRoles();
       if (url.pathname === "/api/status" || url.pathname.endsWith("/api/status")) return ok({ setup_needed: (await all("users")).length === 0 });
       if (url.pathname.endsWith("/api/setup") && method === "POST") {
         if ((await all("users")).length) return error("A configuração inicial já foi concluída.", 409);
-        const username = await addUser(body.username, body.password);
-        localStorage.setItem(SESSION_KEY, username);
-        return ok({ username });
+        const user = await addUser(body.username, body.password, "admin");
+        localStorage.setItem(SESSION_KEY, user.username);
+        return ok(user);
       }
       if (url.pathname.endsWith("/api/login") && method === "POST") {
-        const username = await authenticate(body.username, body.password);
-        if (!username) return error("Usuário ou senha incorretos.", 401);
-        localStorage.setItem(SESSION_KEY, username);
-        return ok({ username });
+        const user = await authenticate(body.username, body.password);
+        if (!user) return error("Usuário ou senha incorretos.", 401);
+        localStorage.setItem(SESSION_KEY, user.username);
+        return ok(user);
       }
       if (url.pathname.endsWith("/api/logout") && method === "POST") { localStorage.removeItem(SESSION_KEY); return ok({ ok: true }); }
       const current = localStorage.getItem(SESSION_KEY);
-      if (!current || !(await one("users", usernameKey(current)))) return error("Entre com seu usuário e senha para continuar.", 401);
-      if (url.pathname.endsWith("/api/me")) return ok({ username: current });
+      const currentRecord = current ? await one("users", usernameKey(current)) : null;
+      if (!currentRecord) return error("Entre com seu usuário e senha para continuar.", 401);
+      if (url.pathname.endsWith("/api/me")) return ok({ username: currentRecord.username, role: currentRecord.role || "seller" });
       if (url.pathname.endsWith("/api/products") && method === "GET") return ok({ products: await readProducts(url.searchParams.get("q") || "") });
-      if (url.pathname.endsWith("/api/products") && method === "POST") return ok({ ok: true, id: await saveProduct(body, current) });
-      if (url.pathname.endsWith("/api/stock") && method === "POST") return ok(await saveMovement(body, current));
-      if (url.pathname.endsWith("/api/sales") && method === "POST") return ok(await saveSale(body, current));
+      if (url.pathname.endsWith("/api/products") && method === "POST") return ok({ ok: true, id: await saveProduct(body, currentRecord.username) });
+      if (url.pathname.startsWith("/api/products/") && method === "DELETE") return ok(await deleteProduct(decodeURIComponent(url.pathname.split("/").pop())));
+      if (url.pathname.endsWith("/api/stock") && method === "POST") return ok(await saveMovement(body, currentRecord.username));
+      if (url.pathname.endsWith("/api/sales") && method === "POST") return ok(await saveSale(body, currentRecord.username));
       if (url.pathname.endsWith("/api/reports")) return ok(await reportData(url.searchParams));
-      if (url.pathname.endsWith("/api/movements")) return ok(await movementRows(url.searchParams));
-      if (url.pathname.endsWith("/api/users") && method === "POST") { await addUser(body.username, body.password); return ok({ ok: true }); }
+      if (url.pathname.endsWith("/api/movements") && method === "GET") return ok(await movementRows(url.searchParams));
+      if (url.pathname.startsWith("/api/movements/") && method === "DELETE") return ok(await deleteMovement(decodeURIComponent(url.pathname.split("/").pop())));
+      if (url.pathname.endsWith("/api/users")) {
+        if (currentRecord.role !== "admin") return error("Somente um administrador pode gerenciar usuários.", 403);
+        const usersStore = "users";
+        if (method === "GET") return ok({ users: (await all(usersStore)).map(u => ({ username: u.username, role: u.role || "seller", created_at: u.created_at })) });
+        if (method === "POST") { const user = await addUser(body.username, body.password, body.role || "seller"); return ok({ ok: true, user }); }
+        if (method === "PUT") {
+          const oldName = String(body.old_username || "").trim(), name = String(body.username || "").trim(), oldKey = usernameKey(oldName), newKey = usernameKey(name);
+          if (!oldName || !name || name.length > 80) return error("Informe um nome de usuário válido.");
+          if (!["admin", "seller"].includes(body.role)) return error("Escolha um perfil válido.");
+          const record = await one(usersStore, oldKey);
+          if (!record) return error("Usuário não encontrado.", 404);
+          if (newKey !== oldKey && await one(usersStore, newKey)) return error("Já existe um usuário com esse nome.");
+          if (record.role === "admin" && body.role !== "admin" && (await all(usersStore)).filter(u => u.role === "admin").length <= 1) return error("Mantenha pelo menos um administrador.");
+          if (body.password && String(body.password).length < 6) return error("Use uma senha com pelo menos 6 caracteres.");
+          record.username = name; record.usernameKey = newKey; record.role = body.role;
+          if (body.password) { const salt = crypto.getRandomValues(new Uint8Array(16)); record.salt = Array.from(salt, b => b.toString(16).padStart(2, "0")).join(""); record.password_hash = await passwordHash(body.password, salt); }
+          await transaction([usersStore], "readwrite", tx => { if (newKey !== oldKey) tx.objectStore(usersStore).delete(oldKey); tx.objectStore(usersStore).put(record); });
+          if (usernameKey(current) === oldKey) localStorage.setItem(SESSION_KEY, name);
+          return ok({ ok: true, session: usernameKey(current) === oldKey ? { username: name, role: record.role } : null });
+        }
+        if (method === "DELETE") {
+          const name = String(body.username || "").trim(), key = usernameKey(name), record = await one(usersStore, key);
+          if (!record) return error("Usuário não encontrado.", 404);
+          if (key === usernameKey(current)) return error("Não é possível excluir o usuário conectado.");
+          if (record.role === "admin" && (await all(usersStore)).filter(u => u.role === "admin").length <= 1) return error("Mantenha pelo menos um administrador.");
+          await transaction([usersStore], "readwrite", tx => tx.objectStore(usersStore).delete(key));
+          return ok({ ok: true });
+        }
+      }
       if (url.pathname.endsWith("/api/password") && method === "POST") {
         if (!await authenticate(current, body.current_password)) return error("Usuário ou senha atual incorretos.");
         if (String(body.new_password || "").length < 6) return error("Use uma nova senha com pelo menos 6 caracteres.");
@@ -375,3 +516,4 @@
 
   window.itelvinoLocalApi = localApi;
 })();
+
