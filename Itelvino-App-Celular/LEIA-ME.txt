@@ -16,7 +16,10 @@ seguindo a estrutura do sistema Wotz.
 - Movimentações com período, busca, filtros por tipo e venda, valores, usuário,
   exportação CSV e histórico com data e hora.
 - Relatórios diários e mensais com navegação entre datas, quantidades, valores
-  vendidos, descontos e custo investido.
+  vendidos, descontos e custo investido; posição atual do estoque em tabela,
+  com custo, preço de venda, lucro bruto unitário e potencial por quantidade.
+- Relatório de estoque filtrável e exportável em CSV compatível com Excel,
+  incluindo custo total, venda potencial e lucro bruto potencial do estoque.
 - Acesso administrativo para criar, editar e remover usuários e definir perfis.
 - Fotos, produtos, vendas e movimentações continuam no IndexedDB local do
   navegador. O primeiro usuário existente é mantido e recebe perfil de
