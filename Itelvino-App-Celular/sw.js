@@ -1,4 +1,4 @@
-const CACHE_NAME = "itelvino-mobile-local-v2";
+const CACHE_NAME = "itelvino-mobile-local-v3";
 const APP_FILES = ["./", "./index.html", "./local-database.js", "./manifest.webmanifest", "./logo.jpg", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", event => {
